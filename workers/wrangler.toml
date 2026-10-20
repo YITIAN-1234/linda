@@ -1,0 +1,12 @@
+# 邻答 Workers 配置
+# Cloudflare Workers：DeepSeek 完整模式后端（API key 存 Secrets）
+
+name = "linda-property-assistant"
+main = "worker.js"
+compatibility_date = "2024-11-01"
+
+# 免费套餐即可：10 万请求/天，演示绰绰有余
+
+[vars]
+# 不需要把 key 放这里——用 secret：
+#   npx wrangler secret put DEEPSEEK_API_KEY

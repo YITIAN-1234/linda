@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f766e">
+<title>邻答 · 澜庭·林语郡物业助手</title>
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;margin:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:#e8ebef;display:flex;justify-content:center;align-items:center;font-size:15px;color:#1f2937}
+  .phone{width:100%;max-width:430px;height:100%;max-height:920px;background:#f5f6f8;
+    display:flex;flex-direction:column;position:relative;overflow:hidden;box-shadow:0 12px 48px rgba(0,0,0,.18)}
+  @media(min-width:480px){.phone{border-radius:22px;height:94vh}}
+  header{background:linear-gradient(135deg,#0f766e,#14b8a6);color:#fff;padding:14px 16px;
+    display:flex;align-items:center;gap:10px;flex-shrink:0;box-shadow:0 2px 8px rgba(15,118,110,.25);z-index:5}
+  .avatar{width:38px;height:38px;border-radius:12px;background:rgba(255,255,255,.22);
+    display:flex;align-items:center;justify-content:center;font-weight:700;font-size:17px}
+  header .who{flex:1;min-width:0}
+  header h1{margin:0;font-size:16px;font-weight:600}
+  header p{margin:2px 0 0;font-size:11.5px;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dot{width:8px;height:8px;border-radius:50%;background:#fbbf24;box-shadow:0 0 0 3px rgba(255,255,255,.25)}
+  .dot.live{background:#4ade80}
+  #chat{flex:1;overflow-y:auto;padding:16px 14px 8px;display:flex;flex-direction:column;gap:14px}
+  #chat::-webkit-scrollbar{width:0}
+  .msg{display:flex;gap:8px;max-width:100%;animation:pop .22s ease}
+  @keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .msg.me{flex-direction:row-reverse}
+  .bub{max-width:80%;padding:10px 13px;border-radius:14px;line-height:1.62;word-break:break-word;
+    white-space:pre-wrap;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+  .me .bub{background:#0f766e;color:#fff;border-bottom-right-radius:4px}
+  .ai .bub{background:#fff;border-bottom-left-radius:4px}
+  .ai .bub.warn{background:#fff7ed;border:1px solid #fed7aa}
+  .mini{width:30px;height:30px;border-radius:10px;flex-shrink:0;margin-top:2px;
+    display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700}
+  .ai .mini{background:#ccfbf1;color:#0f766e}.me .mini{background:#d1d5db;color:#4b5563}
+  .cite{margin-top:8px;padding-top:7px;border-top:1px dashed #e5e7eb;font-size:11.5px;color:#0f766e;line-height:1.7}
+  .cite .tag{display:inline-block;background:#f0fdfa;border:1px solid #99f6e4;color:#0f766e;
+    border-radius:6px;padding:1px 6px;margin:2px 4px 0 0;font-size:11px;cursor:pointer}
+  .ticket{margin-top:9px;background:#fff;border:1px solid #fed7aa;border-radius:10px;
+    padding:9px 11px;font-size:12px;line-height:1.75;color:#374151}
+  .ticket .hd{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+  .ticket .no{font-family:ui-monospace,Menlo,monospace;font-weight:700;color:#c2410c;font-size:12.5px}
+  .ticket .pr{padding:1px 6px;border-radius:5px;font-size:10.5px;font-weight:700;color:#fff;background:#f97316}
+  .ticket .pr.P0{background:#dc2626}.ticket .pr.P2{background:#d97706}.ticket .pr.P3{background:#65a30d}
+  .ticket .row{color:#6b7280}.ticket .row span{color:#374151}
+  .chips{display:flex;gap:7px;overflow-x:auto;padding:0 14px 9px;flex-shrink:0}
+  .chips::-webkit-scrollbar{height:0}
+  .chip{flex-shrink:0;background:#fff;border:1px solid #d1fae5;color:#0f766e;border-radius:14px;
+    padding:6px 11px;font-size:12.5px;cursor:pointer;white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  .chip:active{background:#ecfdf5;transform:scale(.97)}
+  footer{flex-shrink:0;background:#fff;border-top:1px solid #e5e7eb;padding:9px 12px;
+    display:flex;gap:9px;align-items:flex-end;padding-bottom:max(9px,env(safe-area-inset-bottom))}
+  #inp{flex:1;border:1px solid #e5e7eb;background:#f3f4f6;border-radius:19px;padding:9px 14px;
+    font-size:14.5px;outline:none;resize:none;max-height:96px;font-family:inherit;line-height:1.5}
+  #inp:focus{background:#fff;border-color:#5eead4}
+  #send{width:38px;height:38px;border-radius:50%;border:0;background:#0f766e;color:#fff;font-size:15px;
+    cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+  #send:disabled{background:#cbd5e1;cursor:not-allowed}
+  .kbline{text-align:center;font-size:10.5px;color:#9ca3af;padding:0 0 5px;flex-shrink:0}
+  .typing{display:flex;gap:4px;padding:4px 2px}
+  .typing i{width:6px;height:6px;border-radius:50%;background:#9ca3af;animation:blink 1.3s infinite}
+  .typing i:nth-child(2){animation-delay:.2s}.typing i:nth-child(3){animation-delay:.4s}
+  @keyframes blink{0%,60%,100%{opacity:.25;transform:translateY(0)}30%{opacity:1;transform:translateY(-2px)}}
+</style>
+</head>
+<body>
+<div class="phone">
+  <header>
+    <div class="avatar">邻</div>
+    <div class="who">
+      <h1>邻答 · 物业智能助手</h1>
+      <p id="sub">澜庭·林语郡 · 正在连接…</p>
+    </div>
+    <div class="dot" id="dot"></div>
+  </header>
+  <div id="chat"></div>
+  <div class="chips" id="chips"></div>
+  <div class="kbline" id="kbline">正在为您准备服务…</div>
+  <footer>
+    <textarea id="inp" rows="1" placeholder="问制度、办事情、报修投诉…"></textarea>
+    <button id="send" title="发送">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+        stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg>
+    </button>
+  </footer>
+</div>
+
+<script src="assets/engine.js"></script>
+<script>
+(function(){
+  "use strict";
+  // ===== 部署配置：部署 Cloudflare Workers 后，把地址填到这里（不含 key）=====
+  // 留空 = 纯静态模式（本地规则引擎）；填了且后端在线 = DeepSeek 完整模式
+  const WORKER_URL = "";
+
+  const SID = (function(){
+    let s = localStorage.getItem("linda_sid");
+    if(!s){ s = "s_" + Math.random().toString(36).slice(2,10); localStorage.setItem("linda_sid", s); }
+    return s;
+  })();
+  const PROFILE = { unit: "", phone: "" };
+
+  const chatEl = document.getElementById("chat");
+  const inp = document.getElementById("inp");
+  const sendBtn = document.getElementById("send");
+  const chipsEl = document.getElementById("chips");
+  let busy = false;
+  let backend = { online: false, ready: false };
+
+  const QUICK = ["地下车位管理费多少钱","家里漏水报修多久到","装修保证金最多收多少","装修怎么申报",
+    "外来车辆停车怎么收费","楼上半夜装修吵","电动车能推进楼道充电吗","物业费能打几折"];
+
+  function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,
+    c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+  function bubble(role, html){
+    const wrap = document.createElement("div");
+    wrap.className = "msg " + (role==="me" ? "me" : "ai");
+    const mini = document.createElement("div");
+    mini.className = "mini"; mini.textContent = role==="me" ? "我" : "邻";
+    const b = document.createElement("div");
+    b.className = "bub"; b.innerHTML = html;
+    wrap.appendChild(mini); wrap.appendChild(b);
+    chatEl.appendChild(wrap);
+    chatEl.scrollTop = chatEl.scrollHeight;
+    return b;
+  }
+
+  function renderCite(sources){
+    if(!sources || !sources.length) return "";
+    return `<div class="cite"><b>出处</b> ` + sources.map(s =>
+      `<span class="tag">《${esc(s.file)}》${esc(s.clause)}</span>`).join("") + `</div>`;
+  }
+
+  function renderTicket(t){
+    if(!t || !t.ticket_id) return "";
+    const cls = {高:"P0",中:"P2",低:"P3"}[t["紧急程度"]] || "P2";
+    return `<div class="ticket">
+      <div class="hd"><span class="no">${esc(t.ticket_id)}</span>
+        <span class="pr ${cls}">${esc(t["紧急程度"])}</span>
+        <span style="color:#9ca3af">已创建</span></div>
+      <div class="row">类别：<span>${esc(t["类别"]||"")}</span></div>
+      <div class="row">位置：<span>${esc(t["涉及位置"]||"待补充")}</span></div>
+      <div class="row">摘要：<span>${esc(t["问题描述"]||"")}</span></div>
+    </div>`;
+  }
+
+  function renderResult(holder, data){
+    holder.innerHTML = esc(data.answer).replace(/\n/g,"<br>") +
+      renderCite(data.sources) + renderTicket(data.ticket);
+  }
+
+  async function ask(text){
+    if(busy || !text.trim()) return;
+    busy = true; sendBtn.disabled = true;
+    bubble("me", esc(text));
+    const holder = bubble("ai", '<div class="typing"><i></i><i></i><i></i></div>');
+
+    if(backend.online){
+      try{
+        const cands = LindaEngine.searchCandidates(text, 10);
+        const r = await fetch(WORKER_URL + "/chat", {
+          method:"POST", headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({ session_id: SID, message: text, candidates: cands })
+        });
+        if(!r.ok) throw new Error("http " + r.status);
+        const data = await r.json();
+        if(data && typeof data.answer === "string"){
+          renderResult(holder, data);
+          busy = false; sendBtn.disabled = false;
+          chatEl.scrollTop = chatEl.scrollHeight;
+          return;
+        }
+        throw new Error("bad payload");
+      }catch(e){
+        backend.online = false;
+        document.getElementById("sub").textContent = "澜庭·林语郡 · 物业服务助手";
+        document.getElementById("dot").className = "dot";
+      }
+    }
+    // 本地规则引擎兜底
+    try{
+      const res = LindaEngine.handle(SID, text, PROFILE);
+      renderResult(holder, res);
+    }catch(e){
+      holder.innerHTML = "服务暂时不可用，请稍后再试。";
+      holder.classList.add("warn");
+    }
+    busy = false; sendBtn.disabled = false;
+    chatEl.scrollTop = chatEl.scrollHeight;
+  }
+
+  function send(){
+    const t = inp.value.trim();
+    if(!t) return;
+    inp.value = ""; inp.style.height = "auto";
+    ask(t);
+  }
+
+  sendBtn.addEventListener("click", send);
+  inp.addEventListener("keydown", e=>{
+    if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); send(); }
+  });
+  inp.addEventListener("input", ()=>{
+    inp.style.height = "auto";
+    inp.style.height = Math.min(inp.scrollHeight, 96) + "px";
+  });
+  chipsEl.innerHTML = QUICK.map(q=>`<div class="chip">${esc(q)}</div>`).join("");
+  chipsEl.addEventListener("click", e=>{
+    const c = e.target.closest(".chip");
+    if(c) ask(c.textContent);
+  });
+
+  async function boot(){
+    try{
+      const kb = await fetch("assets/kb.json").then(r => r.json());
+      LindaEngine.loadKB(kb);
+      document.getElementById("kbline").textContent = "小区制度查询 · 办事指引 · 报修投诉";
+    }catch(e){
+      document.getElementById("kbline").textContent = "";
+    }
+    if(WORKER_URL){
+      try{
+        const h = await fetch(WORKER_URL + "/health", { signal: AbortSignal.timeout(2500) }).then(r => r.json());
+        if(h && h.status === "ok"){
+          backend.online = true;
+          document.getElementById("sub").textContent = (h.project || "澜庭·林语郡") + " · 物业服务助手";
+          document.getElementById("dot").className = "dot live";
+        }
+      }catch(e){ /* 后端离线，走本地引擎 */ }
+    }
+    if(!backend.online){
+      document.getElementById("sub").textContent = "澜庭·林语郡 · 物业服务助手";
+    }
+    bubble("ai", `您好，我是<b>邻答</b>，澜庭·林语郡的物业服务助手。\n停车、装修、物业费、报修这些小区里的事，都可以问我。`);
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>
