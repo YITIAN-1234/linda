@@ -93,7 +93,7 @@
   "use strict";
   // ===== 部署配置：部署 Cloudflare Workers 后，把地址填到这里（不含 key）=====
   // 留空 = 纯静态模式（本地规则引擎）；填了且后端在线 = DeepSeek 完整模式
-  const WORKER_URL = "";
+  const WORKER_URL = "https://linda-api.3213933081.workers.dev";
 
   const SID = (function(){
     let s = localStorage.getItem("linda_sid");
