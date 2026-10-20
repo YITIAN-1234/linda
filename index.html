@@ -158,36 +158,41 @@
     bubble("me", esc(text));
     const holder = bubble("ai", '<div class="typing"><i></i><i></i><i></i></div>');
 
-    if(backend.online){
+    // 本地引擎永远是主流程：意图、记忆、追问、范围外分流、建单都由它负责
+    let local;
+    try{
+      local = LindaEngine.handle(SID, text, PROFILE);
+    }catch(e){
+      holder.innerHTML = "服务暂时不可用，请稍后再试。";
+      holder.classList.add("warn");
+      busy = false; sendBtn.disabled = false;
+      return;
+    }
+
+    // 仅当「正常作答且后端在线」时，让 DeepSeek 把答案写得更聪明；
+    // 拒答/追问/工单/范围外一律用本地引擎结果（保证记忆与分流一致）
+    if(backend.online && !local.refused && !local.follow_up.needed && local.answer){
       try{
         const cands = LindaEngine.searchCandidates(text, 10);
         const r = await fetch(WORKER_URL + "/chat", {
           method:"POST", headers:{"Content-Type":"application/json"},
           body: JSON.stringify({ session_id: SID, message: text, candidates: cands })
         });
-        if(!r.ok) throw new Error("http " + r.status);
         const data = await r.json();
-        if(data && typeof data.answer === "string"){
-          renderResult(holder, data);
+        if(data && typeof data.answer === "string" && data.citations_ok){
+          renderResult(holder, Object.assign({}, local,
+            { answer: data.answer, sources: data.sources || local.sources }));
           busy = false; sendBtn.disabled = false;
           chatEl.scrollTop = chatEl.scrollHeight;
           return;
         }
-        throw new Error("bad payload");
       }catch(e){
         backend.online = false;
         document.getElementById("sub").textContent = "澜庭·林语郡 · 物业服务助手";
         document.getElementById("dot").className = "dot";
       }
     }
-    // 本地规则引擎兜底
-    try{
-      const res = LindaEngine.handle(SID, text, PROFILE);
-      renderResult(holder, res);
-    }catch(e){
-      holder.innerHTML = "服务暂时不可用，请稍后再试。";
-      holder.classList.add("warn");
-    }
+    renderResult(holder, local);
     busy = false; sendBtn.disabled = false;
     chatEl.scrollTop = chatEl.scrollHeight;
   }
