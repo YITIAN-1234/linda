@@ -295,6 +295,22 @@
     return "无";
   }
 
+  // 工单需求：联系"发起预约"那条信息的上文提取需求（无预约则从全历史兜底）
+  function extractNeed(messages) {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (isVisitRequest(messages[i]) && !TIME_ASK_HINT.test(messages[i])) {
+        // 找到最后一条发起预约的消息，需求取它之前的上文
+        for (let j = i - 1; j >= 0; j--) {
+          for (const [re, label] of SUMMARY_MAP) {
+            if (re.test(messages[j])) return label;
+          }
+        }
+        return "无";
+      }
+    }
+    return summarize(messages);
+  }
+
   function oralize(t) {
     let x = t || "";
     for (const [a, b] of ORAL_RULES) x = x.split(a).join(b);
@@ -713,7 +729,7 @@
       }
       // 工单描述优先取本会话的具体报修内容，而不是"什么时候给我解决/预约上门"这类追问
       const histUsers = session.history.filter(x => x.role === "user").map(x => x.content);
-      const desc = summarize(histUsers);
+      const desc = extractNeed(histUsers);
       const tk = mockTicket(desc, "complaint", slots, profile);
       tk.ticket_id = newTicketId();
       const answer = DIRECT_TPL.replace("{ticket_id}", tk.ticket_id);
@@ -764,7 +780,7 @@
       } else {
         // 建单描述结合上文：优先取本会话含事件词的发言（如"漏水"），而非干巴巴的"预约上门"
         const histUsers = session.history.filter(x => x.role === "user").map(x => x.content);
-        const desc = summarize(histUsers);
+        const desc = extractNeed(histUsers);
         const tk = mockTicket(desc, intent, slots, profile);
         tk.ticket_id = newTicketId();
         result.answer = REFUSE_TPL.replace("{ticket_id}", tk.ticket_id);
