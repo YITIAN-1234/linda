@@ -24,11 +24,11 @@
   .dot.live{background:#4ade80}
   #chat{flex:1;overflow-y:auto;padding:16px 14px 8px;display:flex;flex-direction:column;gap:14px;position:relative}
   #chat::-webkit-scrollbar{width:0}
-  /* 对话框底层水印：透明可见，不挡内容 */
-  #chat .bgwm{position:absolute;inset:0;pointer-events:none;display:flex;
-    align-items:center;justify-content:center;z-index:0}
-  #chat .bgwm span{font-size:62px;font-weight:800;color:#0f766e;opacity:.08;
-    transform:rotate(-18deg);letter-spacing:12px;white-space:nowrap}
+  /* 对话框底层水印：斜向平铺、透明可见、铺满无法被遮盖 */
+  #chat .bgwm{position:absolute;inset:-30%;pointer-events:none;z-index:0;
+    transform:rotate(-18deg);display:flex;flex-direction:column;gap:42px;
+    justify-content:center;align-items:center;opacity:.06}
+  #chat .bgwm .wmline{font-size:13px;font-weight:700;color:#0f766e;letter-spacing:5px;white-space:nowrap}
   .msg{position:relative;z-index:1}
   .msg{display:flex;gap:8px;max-width:100%;animation:pop .22s ease}
   @keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
@@ -84,7 +84,7 @@
     </div>
     <div class="dot" id="dot"></div>
   </header>
-  <div id="chat"><div class="bgwm"><span>演示用</span></div></div>
+  <div id="chat"></div>
   <div class="chips" id="chips"></div>
   <div class="kbline" id="kbline">正在为您准备服务…</div>
   <footer>
@@ -153,6 +153,7 @@
         <span style="color:#9ca3af">已创建</span></div>
       <div class="row">类别：<span>${esc(t["类别"]||"")}</span></div>
       <div class="row">位置：<span>${esc(t["涉及位置"]||"待补充")}</span></div>
+      <div class="row">电话：<span>${esc(t["电话"]||t["备注"]||"待补充")}</span></div>
       <div class="row">摘要：<span>${esc(t["问题描述"]||"")}</span></div>
       <span class="wm">演示用</span>
     </div>`;
@@ -230,6 +231,19 @@
   });
 
   async function boot(){
+    // 底层水印：斜向平铺，铺满聊天区
+    (function buildWatermark(){
+      const box = document.createElement("div");
+      box.className = "bgwm";
+      const text = "HXW作品，仅限比赛";
+      for(let i = 0; i < 10; i++){
+        const line = document.createElement("div");
+        line.className = "wmline";
+        line.textContent = text + "　　" + text;
+        box.appendChild(line);
+      }
+      document.getElementById("chat").prepend(box);
+    })();
     try{
       const kb = await fetch("assets/kb.json").then(r => r.json());
       LindaEngine.loadKB(kb);
