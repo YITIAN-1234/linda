@@ -99,8 +99,8 @@
   // 请求上门服务类：主动要求派人/上门 → 走建单流程（问时限的除外，如"多久安排上门"）
   const REQUEST_VISIT_HINT = /预约上门|安排上门|上门维修|上门看看|派人过来|过来看看|派人上门|安排人来看|让人来看|上门检查|安排师傅|叫师傅|派师傅/;
   const TIME_ASK_HINT = /多久|多长时间|几点|什么时候/;
-  const PHONE_RE = /1[3-9]\d{9}/;
-  const UNIT_RE = /\d{1,3}\s*(?:栋|幢|号楼)\s*[0-9一二三四五六七八九十]{0,2}\s*单元?\s*\d{0,4}\s*室?|\d{1,3}\s*-\s*\d{1,3}\s*-\s*\d{1,4}/;
+  const PHONE_RE = /\d{11}/;
+  const UNIT_RE = /\d{1,3}\s*(?:栋|幢|号楼)\s*[0-9一二三四五六七八九十]{0,2}\s*单元?\s*\d{0,4}\s*室?|\d{1,3}\s*单元\s*\d{0,4}\s*室?|\d{1,3}\s*-\s*\d{1,3}\s*-\s*\d{1,4}/;
 
   const _AMOUNT_Q = /多少钱|多少|几元|收费|费用|价格|标准/;
   const _AMOUNT_EV = /\d[\d,.]*\s*元/;
@@ -154,6 +154,8 @@
   const CANCEL_TPL = "好的，有需要随时找我。";
   // 无前文的「预约上门」：先获取具体诉求
   const ASK_DETAIL_TPL = "好的，请问您需要上门处理什么问题呢？把具体情况告诉我（比如漏水、断电、门禁故障等），我来帮您安排。";
+  // 手机号位数不足的提示
+  const PHONE_ERR_TPL = "请输入正确的手机号";
 
   const ORAL_RULES = [
     ["本小区", "咱们小区"], ["业主、物业使用人", "业主和住户"], ["业主或物业使用人", "业主或住户"],
@@ -200,6 +202,47 @@
     const m2 = UNIT_RE.exec(text || "");
     if (m2) slots.location = m2[0].trim().replace(/[，。、,.!！?？;；]$/, "");
     return slots;
+  }
+
+  // 房号缺什么问什么：返回缺失项文案；齐全返回 null
+  function unitMissing(loc) {
+    if (!loc) return "您的楼栋、单元和房号（如 3 栋 2 单元 501）";
+    if (/^\d{1,3}\s*-\s*\d{1,3}\s*-\s*\d{1,4}$/.test(loc)) return null; // 3-2-501 全齐
+    const parts = [];
+    if (!/\d{1,3}\s*[栋幢号楼]/.test(loc)) parts.push("楼栋号");
+    if (!/\d{1,3}\s*单元/.test(loc)) parts.push("单元");
+    if (!/\d{1,4}\s*[室号]?\s*$/.test(loc)) parts.push("房间号");
+    return parts.length ? "您的" + parts.join("、") : null;
+  }
+
+  // 合并房号补充：已有"3栋2单元"，本轮给"501"→ 拼成"3栋2单元501室"
+  function mergeLocation(existing, text) {
+    const ex = extractSlots(text);
+    if (ex.location) return ex.location;
+    const m = (text || "").trim().match(/^(\d{1,4})\s*[室号]?\s*$/);
+    if (m && existing) {
+      const base = existing.trim().replace(/室$/, "");
+      return base + m[1] + "室";
+    }
+    return existing;
+  }
+
+  // 建单前必问清单：房号缺什么问什么 + 电话
+  function buildMissingQs(slots, profile) {
+    const qs = [];
+    const loc = slots.location || (profile || {}).unit || "";
+    const miss = unitMissing(loc);
+    if (miss) qs.push(miss);
+    if (!(slots.contact || (profile || {}).phone)) qs.push("联系电话");
+    return qs;
+  }
+
+  // 是否在尝试报手机号但位数不足：纯数字不足 11 位，或带电话字样且数字不足 11 位
+  function looksLikePhoneAttempt(text) {
+    const t = (text || "").trim();
+    const digits = t.replace(/\D/g, "");
+    if (!digits || digits.length >= 11) return false;
+    return /^\d+$/.test(t) || /电话|手机|号码|联系方式|手机号/.test(t);
   }
 
   function oralize(t) {
@@ -582,14 +625,24 @@
 
     if (supplement) {
       const ex = extractSlots(message);
+      // 先判定手机号尝试：房号已齐、只差电话、给了不足 11 位的数字 → 提示错误（不得并入房号）
+      const curLoc = session.slots.location || "";
+      const curLocOk = !unitMissing(curLoc || (profile || {}).unit || "");
+      if (curLocOk && !(session.slots.contact || (profile || {}).phone)
+          && looksLikePhoneAttempt(message) && !ex.location) {
+        appendTurn(sid, "assistant", PHONE_ERR_TPL, { intent: "complaint", refused: false, followUp: true });
+        return { intent: "complaint", intent_label: "投诉报修", answer: PHONE_ERR_TPL,
+          sources: [], refused: false, ticket: null,
+          follow_up: { needed: true, questions: ["联系电话"] }, citations_ok: null,
+          candidates: [], latency_ms: Date.now() - t0 };
+      }
       const slots = Object.assign({}, session.slots, ex);
+      const mergedLoc = mergeLocation(slots.location, message);
+      if (mergedLoc) slots.location = mergedLoc;
       session.slots = slots;
       saveSession(sid, session);
-      // 房号与电话都要齐全才建单；缺哪项问哪项
-      const qs = [];
-      if (!(slots.location || (profile || {}).unit))
-        qs.push("您的房号或具体位置（如 3 栋 2 单元 501）");
-      if (!(slots.contact || (profile || {}).phone)) qs.push("联系电话");
+      // 房号缺什么问什么、电话未给问电话
+      const qs = buildMissingQs(slots, profile);
       if (qs.length) {
         // 信息仍不全 → 继续追问（保持流程）
         const answer = FOLLOWUP_TPL.replace("{questions}", qs.join("、"));
@@ -640,11 +693,8 @@
 
     if (!result.refused && !result.answer) {
       const needInfo = intent === "complaint";
-      // 房号与电话都要齐全才建单；缺哪项问哪项
-      const qs = [];
-      if (!(slots.location || (profile || {}).unit))
-        qs.push("您的房号或具体位置（如 3 栋 2 单元 501）");
-      if (!(slots.contact || (profile || {}).phone)) qs.push("联系电话");
+      // 房号缺什么问什么、电话未给问电话
+      const qs = buildMissingQs(slots, profile);
       if (needInfo && qs.length) {
         result.answer = FOLLOWUP_TPL.replace("{questions}", qs.join("、"));
         result.follow_up = { needed: true, questions: qs };
