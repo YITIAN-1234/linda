@@ -9,7 +9,7 @@
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{height:100%;margin:0}
   body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
-    background:#e8ebef;display:flex;justify-content:center;align-items:center;font-size:15px;color:#1f2937}
+    background:#eef1f5;display:flex;justify-content:center;align-items:center;font-size:15px;color:#1f2937}
   .phone{width:100%;max-width:430px;height:100%;max-height:920px;background:#f5f6f8;
     display:flex;flex-direction:column;position:relative;overflow:hidden;box-shadow:0 12px 48px rgba(0,0,0,.18)}
   @media(min-width:480px){.phone{border-radius:22px;height:94vh}}
@@ -22,13 +22,19 @@
   header p{margin:2px 0 0;font-size:11.5px;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .dot{width:8px;height:8px;border-radius:50%;background:#fbbf24;box-shadow:0 0 0 3px rgba(255,255,255,.25)}
   .dot.live{background:#4ade80}
-  #chat{flex:1;overflow-y:auto;padding:16px 14px 8px;display:flex;flex-direction:column;gap:14px}
+  #chat{flex:1;overflow-y:auto;padding:16px 14px 8px;display:flex;flex-direction:column;gap:14px;position:relative}
   #chat::-webkit-scrollbar{width:0}
+  /* 对话框底层水印：透明可见，不挡内容 */
+  #chat .bgwm{position:absolute;inset:0;pointer-events:none;display:flex;
+    align-items:center;justify-content:center;z-index:0}
+  #chat .bgwm span{font-size:62px;font-weight:800;color:#0f766e;opacity:.08;
+    transform:rotate(-18deg);letter-spacing:12px;white-space:nowrap}
+  .msg{position:relative;z-index:1}
   .msg{display:flex;gap:8px;max-width:100%;animation:pop .22s ease}
   @keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
   .msg.me{flex-direction:row-reverse}
   .bub{max-width:80%;padding:10px 13px;border-radius:14px;line-height:1.62;word-break:break-word;
-    white-space:pre-wrap;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+    white-space:pre-wrap;box-shadow:0 1px 3px rgba(31,41,55,.06)}
   .me .bub{background:#0f766e;color:#fff;border-bottom-right-radius:4px}
   .ai .bub{background:#fff;border-bottom-left-radius:4px}
   .ai .bub.warn{background:#fff7ed;border:1px solid #fed7aa}
@@ -38,8 +44,11 @@
   .cite{margin-top:8px;padding-top:7px;border-top:1px dashed #e5e7eb;font-size:11.5px;color:#0f766e;line-height:1.7}
   .cite .tag{display:inline-block;background:#f0fdfa;border:1px solid #99f6e4;color:#0f766e;
     border-radius:6px;padding:1px 6px;margin:2px 4px 0 0;font-size:11px;cursor:pointer}
-  .ticket{margin-top:9px;background:#fff;border:1px solid #fed7aa;border-radius:10px;
-    padding:9px 11px;font-size:12px;line-height:1.75;color:#374151}
+  .ticket{margin-top:9px;background:#fff;border:1px solid #f5d9b8;border-radius:10px;
+    padding:9px 11px;font-size:12px;line-height:1.75;color:#374151;position:relative;overflow:hidden}
+  .ticket .wm{position:absolute;right:7px;bottom:5px;font-size:10.5px;color:#d97706;opacity:.28;
+    font-weight:600;letter-spacing:2px;pointer-events:none;border:1px solid rgba(217,119,6,.3);
+    border-radius:4px;padding:0 4px;transform:rotate(-5deg)}
   .ticket .hd{display:flex;align-items:center;gap:6px;margin-bottom:5px}
   .ticket .no{font-family:ui-monospace,Menlo,monospace;font-weight:700;color:#c2410c;font-size:12.5px}
   .ticket .pr{padding:1px 6px;border-radius:5px;font-size:10.5px;font-weight:700;color:#fff;background:#f97316}
@@ -75,7 +84,7 @@
     </div>
     <div class="dot" id="dot"></div>
   </header>
-  <div id="chat"></div>
+  <div id="chat"><div class="bgwm"><span>演示用</span></div></div>
   <div class="chips" id="chips"></div>
   <div class="kbline" id="kbline">正在为您准备服务…</div>
   <footer>
@@ -145,6 +154,7 @@
       <div class="row">类别：<span>${esc(t["类别"]||"")}</span></div>
       <div class="row">位置：<span>${esc(t["涉及位置"]||"待补充")}</span></div>
       <div class="row">摘要：<span>${esc(t["问题描述"]||"")}</span></div>
+      <span class="wm">演示用</span>
     </div>`;
   }
 
