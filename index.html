@@ -149,8 +149,7 @@
   }
 
   function renderResult(holder, data){
-    // 回答主体加粗，出处/工单为弱化小字，突出主体分辨性
-    holder.innerHTML = "<b>" + esc(data.answer).replace(/\n/g,"<br>") + "</b>" +
+    holder.innerHTML = esc(data.answer).replace(/\n/g,"<br>") +
       renderCite(data.sources) + renderTicket(data.ticket);
   }
 
