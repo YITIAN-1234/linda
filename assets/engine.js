@@ -94,6 +94,11 @@
   const RENT_HINT = /想租|要租|租个|租车位|怎么租|车位怎么租|办车位/;
   const PERSONAL_HINT = /我家|我们家|我们楼|我们单元|我住|我这|我房间|我卫生间|我厨房|楼上|楼下|邻居/;
   const CANCEL_HINT = /算了|不用了|取消|不办了|没事了|先不|回头再说/;
+  // 进度追问类：指代"处理得怎么样了"，需按流程转人工建单（先追问房号，补上即建单）
+  const RESOLVE_HINT = /什么时候给我解决|啥时候解决|什么时候处理|多久能解决|什么时候修好|什么时候弄好|多久能搞定|什么时候来人|啥时候上门|什么时候回复我|给个准信|什么时候弄|处理得怎么样|修得怎么样|怎么还没/;
+  // 请求上门服务类：主动要求派人/上门 → 走建单流程（问时限的除外，如"多久安排上门"）
+  const REQUEST_VISIT_HINT = /预约上门|安排上门|上门维修|上门看看|派人过来|过来看看|派人上门|安排人来看|让人来看|上门检查|安排师傅|叫师傅|派师傅/;
+  const TIME_ASK_HINT = /多久|多长时间|几点|什么时候/;
   const PHONE_RE = /1[3-9]\d{9}/;
   const UNIT_RE = /\d{1,3}\s*(?:栋|幢|号楼)\s*[0-9一二三四五六七八九十]{0,2}\s*单元?\s*\d{0,4}\s*室?|\d{1,3}\s*-\s*\d{1,3}\s*-\s*\d{1,4}/;
 
@@ -115,6 +120,8 @@
   const _GENERAL_EV = /禁止|不得|应当/;
 
   const REFUSE_TPL = "这个问题涉及您家的具体情况，需要物业人工确认。已为您生成工单（编号：{ticket_id}），物业将在24小时内与您联系。如需加急请拨打物业电话。";
+  // 多轮补全信息后的建单话术：上文已铺垫，直接说明建单，不再重复"需人工确认"
+  const DIRECT_TPL = "已为您生成工单（编号：{ticket_id}），物业将在24小时内与您联系。如需加急请拨打物业电话。";
   const OUT_OF_SCOPE_TPL = "抱歉，这个问题不在我的回答范围内。我可以帮您查小区的制度规定（停车、装修、物业费、报修时限等）、解答办事流程，或者帮您报修投诉。";
   const FOLLOWUP_TPL = "为了帮您建单，还需要确认一下：{questions}";
   const CANCEL_TPL = "好的，有需要随时找我。";
@@ -299,9 +306,13 @@
   function mockJudge(message, hits) {
     const q = message || "";
     const [base, extra, syn] = baseExtra(q);
+    const ins = (missing, kind) => ({ verdict: "insufficient", selected: [], missing, kind });
+    // 以下短路优先于领域检查：进度追问 / 请求上门 必须走建单流程
+    if (RESOLVE_HINT.test(q)) return ins("进度追问，转人工建单", "need_human");
+    if (REQUEST_VISIT_HINT.test(q) && !TIME_ASK_HINT.test(q))
+      return ins("请求上门服务，转人工建单", "need_human");
     const domainHit = DOMAIN_TERMS.some(d => q.includes(d)) || syn.size > 0;
     const fuzzyHit = hits.some((h, i) => i < 3 && h.fuzzy);
-    const ins = (missing, kind) => ({ verdict: "insufficient", selected: [], missing, kind });
     if (!domainHit && !fuzzyHit) return ins("不涉及小区事务，且联想检索无依据", "out_of_scope");
     if (hits.length && base.size === 0 && extra.size === 0 && !fuzzyHit)
       return ins("查询无有效词", "out_of_scope");
@@ -474,24 +485,36 @@
     return !domainHit && !fuzzyHit;
   }
 
-  // ---------------- 会话（5 分钟 TTL） ----------------
-  const SESSIONS = new Map();
-  const TTL = 300000;
+  // ---------------- 会话（窗口存活期间保留，关闭窗口即销毁） ----------------
+  // 浏览器：sessionStorage（同标签页内刷新保留、关闭标签页销毁、开新标签页独立）
+  // Node 测试环境：内存 Map 兜底
+  const HAS_SESSION_STORE = (() => {
+    try { return typeof sessionStorage !== "undefined"; } catch (e) { return false; }
+  })();
+  const MEM_SESSIONS = new Map();
+  const SKEY = sid => "linda_session_" + sid;
+
   function getSession(sid) {
-    const now = Date.now();
-    let s = SESSIONS.get(sid);
-    if (!s || now - s.lastActive > TTL) {
-      SESSIONS.delete(sid);
-      s = { history: [], slots: {}, lastActive: now };
-      SESSIONS.set(sid, s);
+    if (HAS_SESSION_STORE) {
+      let s = null;
+      try { s = JSON.parse(sessionStorage.getItem(SKEY(sid)) || "null"); } catch (e) { s = null; }
+      if (!s) s = { history: [], slots: {} };
+      return s;
     }
+    let s = MEM_SESSIONS.get(sid);
+    if (!s) { s = { history: [], slots: {} }; MEM_SESSIONS.set(sid, s); }
     return s;
+  }
+  function saveSession(sid, s) {
+    if (HAS_SESSION_STORE) {
+      try { sessionStorage.setItem(SKEY(sid), JSON.stringify(s)); } catch (e) { /* 容量超限时放弃持久化 */ }
+    }
   }
   function appendTurn(sid, role, content, extra) {
     const s = getSession(sid);
     s.history.push(Object.assign({ role, content }, extra || {}));
     if (s.history.length > 12) s.history = s.history.slice(-12);
-    s.lastActive = Date.now();
+    saveSession(sid, s);
   }
 
   // ---------------- 主入口 ----------------
@@ -516,11 +539,26 @@
     appendTurn(sid, "user", message);
 
     if (supplement) {
-      const slots = Object.assign({}, session.slots, extractSlots(message));
+      const ex = extractSlots(message);
+      const slots = Object.assign({}, session.slots, ex);
       session.slots = slots;
-      const tk = mockTicket(supplement, "complaint", slots, profile);
+      saveSession(sid, session);
+      if (!slots.location && !(profile || {}).unit) {
+        // 本轮仍没补房号 → 继续追问（保持流程）
+        const qs = ["您的房号或具体位置（如 3 栋 2 单元 501）"];
+        if (!slots.contact && !(profile || {}).phone) qs.push("联系电话");
+        const answer = FOLLOWUP_TPL.replace("{questions}", qs.join("、"));
+        appendTurn(sid, "assistant", answer, { intent: "complaint", refused: false, followUp: true });
+        return { intent: "complaint", intent_label: "投诉报修", answer, sources: [], refused: false,
+          ticket: null, follow_up: { needed: true, questions: qs }, citations_ok: null,
+          candidates: [], latency_ms: Date.now() - t0 };
+      }
+      // 工单描述优先取本会话的具体报修内容，而不是"什么时候给我解决"这类进度追问
+      const histUsers = session.history.filter(x => x.role === "user").map(x => x.content);
+      const desc = histUsers.find(x => /漏水|渗水|坏了|故障|噪音|吵|扰|投诉|维修|停电|跳闸|异味|积水|上门/.test(x)) || supplement;
+      const tk = mockTicket(desc, "complaint", slots, profile);
       tk.ticket_id = newTicketId();
-      const answer = REFUSE_TPL.replace("{ticket_id}", tk.ticket_id);
+      const answer = DIRECT_TPL.replace("{ticket_id}", tk.ticket_id);
       appendTurn(sid, "assistant", answer, { intent: "complaint", refused: true });
       return { intent: "complaint", intent_label: "投诉报修", answer, sources: [], refused: true,
         ticket: tk, follow_up: { needed: false, questions: [] }, citations_ok: null,
@@ -529,11 +567,14 @@
 
     // 意图
     let intent = "policy_qa";
-    if (QUESTION_HINT.test(message)) intent = "policy_qa";
+    if (RESOLVE_HINT.test(message)) intent = "complaint";
+    else if (REQUEST_VISIT_HINT.test(message) && !TIME_ASK_HINT.test(message)) intent = "complaint";
+    else if (QUESTION_HINT.test(message)) intent = "policy_qa";
     else if (RENT_HINT.test(message) || SERVICE_WORDS.some(w => message.includes(w))) intent = "service";
     else if (COMPLAINT_WORDS.some(w => message.includes(w))) intent = "complaint";
     const p1slots = extractSlots(message);
     for (const k of Object.keys(p1slots)) if (p1slots[k]) session.slots[k] = p1slots[k];
+    saveSession(sid, session);
     const slots = session.slots;
 
     const hits = retrieve([message]);
