@@ -502,6 +502,7 @@
       "问题描述": (msg.replace(/\s+/g, " ") || "业主咨询").slice(0, 60),
       "类别": cat, "紧急程度": level,
       "涉及位置": slots.location || (profile || {}).unit || "",
+      "电话": contact,
       "备注": contact ? `联系方式：${contact}` : "",
     };
   }
@@ -584,10 +585,13 @@
       const slots = Object.assign({}, session.slots, ex);
       session.slots = slots;
       saveSession(sid, session);
-      if (!slots.location && !(profile || {}).unit) {
-        // 本轮仍没补房号 → 继续追问（保持流程）
-        const qs = ["您的房号或具体位置（如 3 栋 2 单元 501）"];
-        if (!slots.contact && !(profile || {}).phone) qs.push("联系电话");
+      // 房号与电话都要齐全才建单；缺哪项问哪项
+      const qs = [];
+      if (!(slots.location || (profile || {}).unit))
+        qs.push("您的房号或具体位置（如 3 栋 2 单元 501）");
+      if (!(slots.contact || (profile || {}).phone)) qs.push("联系电话");
+      if (qs.length) {
+        // 信息仍不全 → 继续追问（保持流程）
         const answer = FOLLOWUP_TPL.replace("{questions}", qs.join("、"));
         appendTurn(sid, "assistant", answer, { intent: "complaint", refused: false, followUp: true });
         return { intent: "complaint", intent_label: "投诉报修", answer, sources: [], refused: false,
@@ -635,11 +639,13 @@
     }
 
     if (!result.refused && !result.answer) {
-      const needLoc = intent === "complaint";
-      const haveLoc = Boolean(slots.location || (profile || {}).unit);
-      if (needLoc && !haveLoc) {
-        const qs = ["您的房号或具体位置（如 3 栋 2 单元 501）"];
-        if (!(slots.contact || (profile || {}).phone)) qs.push("联系电话");
+      const needInfo = intent === "complaint";
+      // 房号与电话都要齐全才建单；缺哪项问哪项
+      const qs = [];
+      if (!(slots.location || (profile || {}).unit))
+        qs.push("您的房号或具体位置（如 3 栋 2 单元 501）");
+      if (!(slots.contact || (profile || {}).phone)) qs.push("联系电话");
+      if (needInfo && qs.length) {
         result.answer = FOLLOWUP_TPL.replace("{questions}", qs.join("、"));
         result.follow_up = { needed: true, questions: qs };
       } else if (j.kind === "out_of_scope" || isOutOfScope(message, hits)) {
