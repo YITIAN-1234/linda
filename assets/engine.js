@@ -123,7 +123,7 @@
   const TYPO_MAP = [
     ["物夜费", "物业费"], ["物也费", "物业费"], ["物叶费", "物业费"], ["物费", "物业费"],
     ["负业费", "物业费"], ["停撤费", "停车费"], ["停车非", "停车费"], ["停撤", "停车"], ["挺车", "停车"],
-    ["单园", "单元"], ["单员", "单元"], ["单远", "单元"],
+    ["单园", "单元"], ["单员", "单元"], ["单远", "单元"], ["但愿", "单元"], ["单原", "单元"],
     ["保休", "保修"], ["保收", "保修"], ["维休", "维修"], ["违修", "维修"], ["维收", "维修"],
     ["门近", "门禁"], ["门金", "门禁"], ["住护", "住户"], ["住互", "住户"],
     ["车为", "车位"], ["车伪", "车位"], ["车维", "车位"], ["撤位", "车位"],
@@ -215,21 +215,35 @@
     return parts.length ? "您的" + parts.join("、") : null;
   }
 
-  // 合并房号补充：已有"2 单元 501"，本轮给"9栋"→ 拼成"9栋2 单元 501"；给"501"→ 拼房号
+  // 合并房号补充（渐进式）：
+  //  已有"2 单元 501"，给"9栋"→"9栋2 单元 501"；给"2单元"→插入楼栋后；给"201"→替换房号
   function mergeLocation(existing, text) {
     const ex = extractSlots(text);
+    const t = (text || "").trim();
     if (ex.location) {
-      // 纯楼栋补全（如"9栋"）：拼到已有"单元+房号"前面
-      if (existing && /^\d{1,3}\s*[栋幢号楼]\s*$/.test(ex.location.trim())
-          && /\d{1,3}\s*单元/.test(existing)) {
-        return ex.location.trim() + existing.trim();
+      const el = ex.location.trim();
+      if (!existing) return el;
+      // 纯楼栋补全（如"9栋"）：拼到最前
+      if (/^\d{1,3}\s*[栋幢号楼]\s*$/.test(el)) return el + existing;
+      // 单元补全（如"2 单元"或"2 单元 501"）：插到楼栋之后，丢弃残缺尾部；
+      // 若只给单元且已有房号，保留已有房号
+      if (/^\d{1,3}\s*单元/.test(el)) {
+        const m = existing.match(/^(\d{1,3}\s*[栋幢号楼])/);
+        if (m) {
+          const room = /^\d{1,3}\s*单元\s*$/.test(el) ? existing.match(/\d{1,4}\s*室?\s*$/) : null;
+          return m[1] + el + (room ? room[0] : "");
+        }
       }
-      return ex.location;
+      return el;
     }
-    const m = (text || "").trim().match(/^(\d{1,4})\s*[室号]?\s*$/);
-    if (m && existing) {
-      const base = existing.trim().replace(/室$/, "");
-      return base + m[1] + "室";
+    const m = t.match(/^(\d{1,4})\s*[室号]?\s*$/);
+    if (m) {
+      if (existing) {
+        // 已有房号时视为更正：替换末尾房号
+        const base = existing.trim().replace(/\d{1,4}\s*室?\s*$/, "");
+        return base + m[1] + "室";
+      }
+      return m[1] + "室";
     }
     return existing;
   }
