@@ -306,19 +306,18 @@
   function mockJudge(message, hits) {
     const q = message || "";
     const [base, extra, syn] = baseExtra(q);
+    const ins = (missing, kind) => ({ verdict: "insufficient", selected: [], missing, kind });
+    // 以下短路优先于领域检查：进度追问 / 请求上门 必须走建单流程
+    if (RESOLVE_HINT.test(q)) return ins("进度追问，转人工建单", "need_human");
+    if (REQUEST_VISIT_HINT.test(q) && !TIME_ASK_HINT.test(q))
+      return ins("请求上门服务，转人工建单", "need_human");
     const domainHit = DOMAIN_TERMS.some(d => q.includes(d)) || syn.size > 0;
     const fuzzyHit = hits.some((h, i) => i < 3 && h.fuzzy);
-    const ins = (missing, kind) => ({ verdict: "insufficient", selected: [], missing, kind });
     if (!domainHit && !fuzzyHit) return ins("不涉及小区事务，且联想检索无依据", "out_of_scope");
     if (hits.length && base.size === 0 && extra.size === 0 && !fuzzyHit)
       return ins("查询无有效词", "out_of_scope");
     if (PERSONAL_HINT.test(q) && !QUESTION_HINT.test(q) && /漏水|渗水|坏了|故障|停电|跳闸|积水|堵了|冒水|爆了/.test(q))
       return ins("个案报修，需转人工", "need_human");
-    // 进度追问（什么时候给我解决等）：制度无法回答，转人工建单流程
-    if (RESOLVE_HINT.test(q)) return ins("进度追问，转人工建单", "need_human");
-    // 请求上门服务（预约上门等，非问时限）：走建单流程
-    if (REQUEST_VISIT_HINT.test(q) && !TIME_ASK_HINT.test(q))
-      return ins("请求上门服务，转人工建单", "need_human");
     if (_NAME_Q.test(q)) return ins("知识库不含个人姓名信息", "out_of_scope");
     if (_DISCOUNT_Q.test(q)) {
       const cands = hits.slice(0, 10).filter(h => _DISCOUNT_Q.test(h.clause.t));
