@@ -119,12 +119,41 @@
   const _NAME_Q = /名字|姓名|叫什么|是谁/;
   const _GENERAL_EV = /禁止|不得|应当/;
 
+  // 错字/别字归一化：常见音近、形近错别字 → 正确用字（仅作用于查询，不改条款原文）
+  const TYPO_MAP = [
+    ["物夜费", "物业费"], ["物也费", "物业费"], ["物叶费", "物业费"], ["物费", "物业费"],
+    ["负业费", "物业费"], ["停撤费", "停车费"], ["停车非", "停车费"], ["停撤", "停车"], ["挺车", "停车"],
+    ["单园", "单元"], ["单员", "单元"], ["单远", "单元"],
+    ["保休", "保修"], ["保收", "保修"], ["维休", "维修"], ["违修", "维修"], ["维收", "维修"],
+    ["门近", "门禁"], ["门金", "门禁"], ["住护", "住户"], ["住互", "住户"],
+    ["车为", "车位"], ["车伪", "车位"], ["车维", "车位"], ["撤位", "车位"],
+    ["停车为", "停车位"], ["停撤位", "停车位"],
+    ["装休", "装修"], ["壮修", "装修"], ["壮休", "装修"],
+    ["压金", "押金"], ["鸭金", "押金"],
+    ["漏税", "漏水"], ["楼水", "漏水"],
+    ["澡音", "噪音"], ["燥音", "噪音"], ["造音", "噪音"],
+    ["电体", "电梯"], ["电涕", "电梯"],
+    ["懂", "栋"], ["冻", "栋"],
+    ["门禁卡", "门禁卡"], ["缴非", "缴费"], ["缴废", "缴费"],
+    ["清运非", "清运费"], ["清运废", "清运费"],
+  ];
+
+  function fixTypos(q) {
+    let x = q || "";
+    for (const [a, b] of TYPO_MAP) if (x.includes(a)) x = x.split(a).join(b);
+    x = x.replace(/(\d)\s*东/g, "$1栋");   // 房号语境：3东 → 3栋
+    x = x.replace(/[oO]/g, "0");           // 数字混淆：o/O → 0
+    return x;
+  }
+
   const REFUSE_TPL = "这个问题涉及您家的具体情况，需要物业人工确认。已为您生成工单（编号：{ticket_id}），物业将在24小时内与您联系。如需加急请拨打物业电话。";
   // 多轮补全信息后的建单话术：上文已铺垫，直接说明建单，不再重复"需人工确认"
   const DIRECT_TPL = "已为您生成工单（编号：{ticket_id}），物业将在24小时内与您联系。如需加急请拨打物业电话。";
   const OUT_OF_SCOPE_TPL = "抱歉，这个问题不在我的回答范围内。我可以帮您查小区的制度规定（停车、装修、物业费、报修时限等）、解答办事流程，或者帮您报修投诉。";
   const FOLLOWUP_TPL = "为了帮您建单，还需要确认一下：{questions}";
   const CANCEL_TPL = "好的，有需要随时找我。";
+  // 无前文的「预约上门」：先获取具体诉求
+  const ASK_DETAIL_TPL = "好的，请问您需要上门处理什么问题呢？把具体情况告诉我（比如漏水、断电、门禁故障等），我来帮您安排。";
 
   const ORAL_RULES = [
     ["本小区", "咱们小区"], ["业主、物业使用人", "业主和住户"], ["业主或物业使用人", "业主或住户"],
@@ -519,11 +548,23 @@
 
   // ---------------- 主入口 ----------------
   function handle(sid, message, profile) {
-    message = (message || "").trim().slice(0, 1000);
+    message = fixTypos((message || "").trim()).slice(0, 1000);
     const t0 = Date.now();
     const session = getSession(sid);
     const prev = session.history[session.history.length - 1];
+    const priorUserCount = session.history.filter(x => x.role === "user").length;
     let supplement = null;
+
+    // 无前文的「预约上门」：先获取具体诉求，再走建单流程
+    if (REQUEST_VISIT_HINT.test(message) && !TIME_ASK_HINT.test(message)
+        && priorUserCount === 0 && !prev) {
+      appendTurn(sid, "user", message);
+      appendTurn(sid, "assistant", ASK_DETAIL_TPL, { intent: "complaint", refused: false, followUp: true });
+      return { intent: "complaint", intent_label: "投诉报修", answer: ASK_DETAIL_TPL,
+        sources: [], refused: false, ticket: null,
+        follow_up: { needed: true, questions: ["具体诉求"] }, citations_ok: null,
+        candidates: [], latency_ms: Date.now() - t0 };
+    }
 
     if (prev && prev.role === "assistant" && prev.followUp) {
       if (CANCEL_HINT.test(message)) {
@@ -553,9 +594,9 @@
           ticket: null, follow_up: { needed: true, questions: qs }, citations_ok: null,
           candidates: [], latency_ms: Date.now() - t0 };
       }
-      // 工单描述优先取本会话的具体报修内容，而不是"什么时候给我解决"这类进度追问
+      // 工单描述优先取本会话的具体报修内容，而不是"什么时候给我解决/预约上门"这类追问
       const histUsers = session.history.filter(x => x.role === "user").map(x => x.content);
-      const desc = histUsers.find(x => /漏水|渗水|坏了|故障|噪音|吵|扰|投诉|维修|停电|跳闸|异味|积水|上门/.test(x)) || supplement;
+      const desc = histUsers.find(x => /漏水|渗水|坏了|故障|噪音|吵|扰|投诉|维修|停电|跳闸|异味|积水|断电|堵塞/.test(x)) || supplement;
       const tk = mockTicket(desc, "complaint", slots, profile);
       tk.ticket_id = newTicketId();
       const answer = DIRECT_TPL.replace("{ticket_id}", tk.ticket_id);
