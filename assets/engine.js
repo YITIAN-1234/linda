@@ -626,6 +626,7 @@
     const prev = session.history[session.history.length - 1];
     const priorUserCount = session.history.filter(x => x.role === "user").length;
     let supplement = null;
+    let interrupted = false;
 
     // 无前文的「预约上门」：先获取具体诉求，再走建单流程
     if (isVisitRequest(message) && !TIME_ASK_HINT.test(message)
@@ -646,8 +647,16 @@
           sources: [], refused: false, ticket: null, follow_up: { needed: false, questions: [] },
           citations_ok: null, candidates: [], latency_ms: Date.now() - t0 };
       }
-      const prevUser = [...session.history].reverse().find(x => x.role === "user");
-      supplement = prevUser ? prevUser.content : message;
+      // 是否在补信息（房号/电话/数字），否则视为打断追问的新问题
+      const sl = extractSlots(message);
+      const isSupplement = !!(sl.location || sl.contact) || looksLikePhoneAttempt(message)
+        || /^\d{1,4}\s*[室号]?\s*$/.test(message.trim());
+      if (isSupplement) {
+        const prevUser = [...session.history].reverse().find(x => x.role === "user");
+        supplement = prevUser ? prevUser.content : message;
+      } else {
+        interrupted = true;  // 新问题：停止本次追问，先正常回答
+      }
     }
     appendTurn(sid, "user", message);
 
@@ -743,9 +752,15 @@
     }
 
     result.latency_ms = Date.now() - t0;
+    // 打断追问：先答新问题，若已采集部分信息则补一条追问（由前端半秒后追加显示）
+    const pendingQs = interrupted ? buildMissingQs(slots, profile) : [];
+    if (pendingQs.length) {
+      result.append_followup = FOLLOWUP_TPL.replace("{questions}", pendingQs.join("、"));
+    }
+    const keepFollowUp = result.follow_up.needed || pendingQs.length > 0;
     appendTurn(sid, "assistant", result.answer, {
       intent, sources: result.sources, refused: result.refused,
-      followUp: result.follow_up.needed,
+      followUp: keepFollowUp,
     });
     return result;
   }
