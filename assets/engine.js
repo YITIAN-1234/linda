@@ -100,7 +100,7 @@
   const REQUEST_VISIT_HINT = /预约上门|安排上门|上门维修|上门看看|派人过来|过来看看|派人上门|安排人来看|让人来看|上门检查|安排师傅|叫师傅|派师傅/;
   const TIME_ASK_HINT = /多久|多长时间|几点|什么时候/;
   const PHONE_RE = /\d{11}/;
-  const UNIT_RE = /\d{1,3}\s*(?:栋|幢|号楼)\s*[0-9一二三四五六七八九十]{0,2}\s*单元?\s*\d{0,4}\s*室?|\d{1,3}\s*单元\s*\d{0,4}\s*室?|\d{1,3}\s*-\s*\d{1,3}\s*-\s*\d{1,4}/;
+  const UNIT_RE = /\d{1,3}\s*(?:栋|幢|号楼)\s*[0-9一二三四五六七八九十]{0,2}\s*(?:单元)?\s*\d{0,4}\s*室?|\d{1,3}\s*单元\s*\d{0,4}\s*室?|\d{1,3}\s*-\s*\d{1,3}\s*-\s*\d{1,4}/;
 
   const _AMOUNT_Q = /多少钱|多少|几元|收费|费用|价格|标准/;
   const _AMOUNT_EV = /\d[\d,.]*\s*元/;
@@ -215,10 +215,17 @@
     return parts.length ? "您的" + parts.join("、") : null;
   }
 
-  // 合并房号补充：已有"3栋2单元"，本轮给"501"→ 拼成"3栋2单元501室"
+  // 合并房号补充：已有"2 单元 501"，本轮给"9栋"→ 拼成"9栋2 单元 501"；给"501"→ 拼房号
   function mergeLocation(existing, text) {
     const ex = extractSlots(text);
-    if (ex.location) return ex.location;
+    if (ex.location) {
+      // 纯楼栋补全（如"9栋"）：拼到已有"单元+房号"前面
+      if (existing && /^\d{1,3}\s*[栋幢号楼]\s*$/.test(ex.location.trim())
+          && /\d{1,3}\s*单元/.test(existing)) {
+        return ex.location.trim() + existing.trim();
+      }
+      return ex.location;
+    }
     const m = (text || "").trim().match(/^(\d{1,4})\s*[室号]?\s*$/);
     if (m && existing) {
       const base = existing.trim().replace(/室$/, "");
@@ -636,8 +643,9 @@
           follow_up: { needed: true, questions: ["联系电话"] }, citations_ok: null,
           candidates: [], latency_ms: Date.now() - t0 };
       }
+      const prevLoc = session.slots.location || "";
       const slots = Object.assign({}, session.slots, ex);
-      const mergedLoc = mergeLocation(slots.location, message);
+      const mergedLoc = mergeLocation(prevLoc, message);
       if (mergedLoc) slots.location = mergedLoc;
       session.slots = slots;
       saveSession(sid, session);
