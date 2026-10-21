@@ -164,6 +164,15 @@
       renderCite(data.sources) + renderTicket(data.ticket);
   }
 
+  function appendFollowup(text){
+    if(!text) return;
+    setTimeout(() => {
+      const b = bubble("ai", esc(text));
+      b.style.animation = "none";
+      chatEl.scrollTop = chatEl.scrollHeight;
+    }, 500);
+  }
+
   async function ask(text){
     if(busy || !text.trim()) return;
     busy = true; sendBtn.disabled = true;
@@ -194,6 +203,7 @@
         if(data && typeof data.answer === "string" && data.citations_ok){
           renderResult(holder, Object.assign({}, local,
             { answer: data.answer, sources: data.sources || local.sources }));
+          appendFollowup(local.append_followup);
           busy = false; sendBtn.disabled = false;
           chatEl.scrollTop = chatEl.scrollHeight;
           return;
@@ -206,13 +216,7 @@
     }
     renderResult(holder, local);
     // 打断追问后：先答新问题，半秒后追加一条补全信息追问
-    if(local.append_followup){
-      setTimeout(() => {
-        const b = bubble("ai", esc(local.append_followup));
-        b.style.animation = "none";
-        chatEl.scrollTop = chatEl.scrollHeight;
-      }, 500);
-    }
+    appendFollowup(local.append_followup);
     busy = false; sendBtn.disabled = false;
     chatEl.scrollTop = chatEl.scrollHeight;
   }
