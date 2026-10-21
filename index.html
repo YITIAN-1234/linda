@@ -205,6 +205,14 @@
       }
     }
     renderResult(holder, local);
+    // 打断追问后：先答新问题，半秒后追加一条补全信息追问
+    if(local.append_followup){
+      setTimeout(() => {
+        const b = bubble("ai", esc(local.append_followup));
+        b.style.animation = "none";
+        chatEl.scrollTop = chatEl.scrollHeight;
+      }, 500);
+    }
     busy = false; sendBtn.disabled = false;
     chatEl.scrollTop = chatEl.scrollHeight;
   }
