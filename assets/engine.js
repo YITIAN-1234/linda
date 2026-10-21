@@ -736,7 +736,7 @@
       if (needInfo && qs.length) {
         result.answer = FOLLOWUP_TPL.replace("{questions}", qs.join("、"));
         result.follow_up = { needed: true, questions: qs };
-      } else if (j.kind === "out_of_scope" || isOutOfScope(message, hits)) {
+      } else if (j.kind === "out_of_scope" || (j.kind !== "need_human" && isOutOfScope(message, hits))) {
         result.answer = OUT_OF_SCOPE_TPL;
         result.refused = true;
       } else {
@@ -752,8 +752,11 @@
     }
 
     result.latency_ms = Date.now() - t0;
-    // 打断追问：先答新问题，若已采集部分信息则补一条追问（由前端半秒后追加显示）
-    const pendingQs = interrupted ? buildMissingQs(slots, profile) : [];
+    // 打断追问：仅当新问题正常作答（非追问、非拒答）时，才在下方追加补全信息追问
+    let pendingQs = [];
+    if (interrupted && !result.follow_up.needed && !result.refused) {
+      pendingQs = buildMissingQs(slots, profile);
+    }
     if (pendingQs.length) {
       result.append_followup = FOLLOWUP_TPL.replace("{questions}", pendingQs.join("、"));
     }
