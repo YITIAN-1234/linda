@@ -99,6 +99,13 @@
   // 请求上门服务类：主动要求派人/上门 → 走建单流程（问时限的除外，如"多久安排上门"）
   const REQUEST_VISIT_HINT = /预约上门|安排上门|上门维修|上门看看|派人过来|过来看看|派人上门|安排人来看|让人来看|上门检查|安排师傅|叫师傅|派师傅/;
   const TIME_ASK_HINT = /多久|多长时间|几点|什么时候/;
+
+  // 「上门/上门服务/预约服务/预约上门服务」等关键词与「预约」同时出现才判建单
+  function isVisitRequest(q) {
+    if (REQUEST_VISIT_HINT.test(q)) return true;
+    if (!/预约/.test(q)) return false;
+    return /上门|服务|维修|检查|师傅|看/.test(q);
+  }
   const PHONE_RE = /\d{11}/;
   const UNIT_RE = /\d{1,3}\s*(?:栋|幢|号楼)\s*[0-9一二三四五六七八九十]{0,2}\s*(?:单元)?\s*\d{0,4}\s*室?|\d{1,3}\s*单元\s*\d{0,4}\s*室?|\d{1,3}\s*-\s*\d{1,3}\s*-\s*\d{1,4}/;
 
@@ -402,7 +409,7 @@
     const ins = (missing, kind) => ({ verdict: "insufficient", selected: [], missing, kind });
     // 以下短路优先于领域检查：进度追问 / 请求上门 必须走建单流程
     if (RESOLVE_HINT.test(q)) return ins("进度追问，转人工建单", "need_human");
-    if (REQUEST_VISIT_HINT.test(q) && !TIME_ASK_HINT.test(q))
+    if (isVisitRequest(q) && !TIME_ASK_HINT.test(q))
       return ins("请求上门服务，转人工建单", "need_human");
     const domainHit = DOMAIN_TERMS.some(d => q.includes(d)) || syn.size > 0;
     const fuzzyHit = hits.some((h, i) => i < 3 && h.fuzzy);
@@ -621,7 +628,7 @@
     let supplement = null;
 
     // 无前文的「预约上门」：先获取具体诉求，再走建单流程
-    if (REQUEST_VISIT_HINT.test(message) && !TIME_ASK_HINT.test(message)
+    if (isVisitRequest(message) && !TIME_ASK_HINT.test(message)
         && priorUserCount === 0 && !prev) {
       appendTurn(sid, "user", message);
       appendTurn(sid, "assistant", ASK_DETAIL_TPL, { intent: "complaint", refused: false, followUp: true });
@@ -688,7 +695,7 @@
     // 意图
     let intent = "policy_qa";
     if (RESOLVE_HINT.test(message)) intent = "complaint";
-    else if (REQUEST_VISIT_HINT.test(message) && !TIME_ASK_HINT.test(message)) intent = "complaint";
+    else if (isVisitRequest(message) && !TIME_ASK_HINT.test(message)) intent = "complaint";
     else if (QUESTION_HINT.test(message)) intent = "policy_qa";
     else if (RENT_HINT.test(message) || SERVICE_WORDS.some(w => message.includes(w))) intent = "service";
     else if (COMPLAINT_WORDS.some(w => message.includes(w))) intent = "complaint";
