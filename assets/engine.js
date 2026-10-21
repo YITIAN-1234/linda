@@ -731,7 +731,10 @@
         result.answer = OUT_OF_SCOPE_TPL;
         result.refused = true;
       } else {
-        const tk = mockTicket(message, intent, slots, profile);
+        // 建单描述结合上文：优先取本会话含事件词的发言（如"漏水"），而非干巴巴的"预约上门"
+        const histUsers = session.history.filter(x => x.role === "user").map(x => x.content);
+        const desc = histUsers.find(x => /漏水|渗水|坏了|故障|噪音|吵|扰|投诉|维修|停电|跳闸|异味|积水|断电|堵塞/.test(x)) || message;
+        const tk = mockTicket(desc, intent, slots, profile);
         tk.ticket_id = newTicketId();
         result.answer = REFUSE_TPL.replace("{ticket_id}", tk.ticket_id);
         result.ticket = tk;
