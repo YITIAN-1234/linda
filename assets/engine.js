@@ -273,6 +273,28 @@
     return /^\d+$/.test(t) || /电话|手机|号码|联系方式|手机号/.test(t);
   }
 
+  // 工单摘要：从上下文提炼标准事件短语；无则"无"
+  const SUMMARY_MAP = [
+    [/漏水|渗水|跑水|冒水|积水|水管|水龙头|爆管/, "漏水报修"],
+    [/停电|跳闸|断电|漏电/, "停电报修"],
+    [/困人|电梯/, "电梯报修"],
+    [/噪音|噪声|吵|扰民/, "噪音投诉"],
+    [/门禁|门锁/, "门禁报修"],
+    [/燃气|漏气|煤气/, "燃气报修"],
+    [/消防|着火|火情/, "消防报修"],
+    [/垃圾|保洁|卫生|异味/, "保洁投诉"],
+    [/停车|车位|车辆/, "停车咨询"],
+    [/物业费|管理费|物业非|物也费/, "物业费咨询"],
+  ];
+  function summarize(messages) {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      for (const [re, label] of SUMMARY_MAP) {
+        if (re.test(messages[i])) return label;
+      }
+    }
+    return "无";
+  }
+
   function oralize(t) {
     let x = t || "";
     for (const [a, b] of ORAL_RULES) x = x.split(a).join(b);
@@ -691,7 +713,7 @@
       }
       // 工单描述优先取本会话的具体报修内容，而不是"什么时候给我解决/预约上门"这类追问
       const histUsers = session.history.filter(x => x.role === "user").map(x => x.content);
-      const desc = histUsers.find(x => /漏水|渗水|坏了|故障|噪音|吵|扰|投诉|维修|停电|跳闸|异味|积水|断电|堵塞/.test(x)) || supplement;
+      const desc = summarize(histUsers);
       const tk = mockTicket(desc, "complaint", slots, profile);
       tk.ticket_id = newTicketId();
       const answer = DIRECT_TPL.replace("{ticket_id}", tk.ticket_id);
@@ -742,7 +764,7 @@
       } else {
         // 建单描述结合上文：优先取本会话含事件词的发言（如"漏水"），而非干巴巴的"预约上门"
         const histUsers = session.history.filter(x => x.role === "user").map(x => x.content);
-        const desc = histUsers.find(x => /漏水|渗水|坏了|故障|噪音|吵|扰|投诉|维修|停电|跳闸|异味|积水|断电|堵塞/.test(x)) || message;
+        const desc = summarize(histUsers);
         const tk = mockTicket(desc, intent, slots, profile);
         tk.ticket_id = newTicketId();
         result.answer = REFUSE_TPL.replace("{ticket_id}", tk.ticket_id);
